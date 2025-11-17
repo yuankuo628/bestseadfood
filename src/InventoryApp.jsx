@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
@@ -17,6 +17,21 @@ export default function InventoryApp() {
   // 進貨
   const [purchaseList, setPurchaseList] = useState([{ name: "", qty: "", price: "", cost: "", supplier: "" }]);
   const [purchases, setPurchases] = useState([]);
+
+  // ✅ 新增：進貨暫存與提示訊息
+  const [form, setForm] = useState({ name: "", qty: "" });
+  const [message, setMessage] = useState("");
+
+  // 初次載入 localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("draftStockEntry");
+    if (saved) setForm(JSON.parse(saved));
+  }, []);
+
+  // 每次輸入都更新 localStorage
+  useEffect(() => {
+    localStorage.setItem("draftStockEntry", JSON.stringify(form));
+  }, [form]);
 
   // 訂單
   const [orders, setOrders] = useState([]);
@@ -262,44 +277,58 @@ const exportOrdersToExcelByDate = (startDate, endDate) => {
     setEditOrderItems([]);
   };
 
-  // 進貨管理
-  const addPurchaseRow = () => {
-    setPurchaseList(prev => [...prev, { name: "", qty: "", price: "", cost: "", supplier: "" }]);
-  };
-  const updatePurchaseRow = (idx, field, val) => {
-    setPurchaseList(prev => prev.map((p, i) => (i === idx ? { ...p, [field]: val } : p)));
-  };
-  const addPurchase = () => {
-    const now = new Date().toLocaleString();
-    setItems(prev => {
-      const updated = [...prev];
-      purchaseList.forEach(p => {
-        if (!p.name || !p.qty) return;
-        const exist = updated.find(i => i.name === p.name);
-        if (exist) {
-          exist.qty += Number(p.qty);
-          if (p.price !== "") exist.price = Number(p.price);
-          if (p.cost !== "") exist.cost = Number(p.cost);
-          if (p.supplier !== "") exist.supplier = p.supplier;
-        } else {
-          updated.push({
-            id: Date.now() + Math.random(),
-            name: p.name,
-            qty: Number(p.qty),
-            price: Number(p.price || 0),
-            cost: Number(p.cost || 0),
-            supplier: p.supplier || ""
-          });
-        }
-      });
-      return updated;
+// 進貨管理
+const addPurchaseRow = () => {
+  setPurchaseList(prev => [...prev, { name: "", qty: "", price: "", cost: "", supplier: "" }]);
+};
+
+const updatePurchaseRow = (idx, field, val) => {
+  setPurchaseList(prev => prev.map((p, i) => (i === idx ? { ...p, [field]: val } : p)));
+};
+
+const addPurchase = () => {
+  const now = new Date().toLocaleString();
+  setItems(prev => {
+    const updated = [...prev];
+    purchaseList.forEach(p => {
+      if (!p.name || !p.qty) return;
+      const exist = updated.find(i => i.name === p.name);
+      if (exist) {
+        exist.qty += Number(p.qty);
+        if (p.price !== "") exist.price = Number(p.price);
+        if (p.cost !== "") exist.cost = Number(p.cost);
+        if (p.supplier !== "") exist.supplier = p.supplier;
+      } else {
+        updated.push({
+          id: Date.now() + Math.random(),
+          name: p.name,
+          qty: Number(p.qty),
+          price: Number(p.price || 0),
+          cost: Number(p.cost || 0),
+          supplier: p.supplier || ""
+        });
+      }
     });
-    setPurchases(prev => [...prev, { id: Date.now(), date: now, items: purchaseList }]);
-    setPurchaseList([{ name: "", qty: "", price: "", cost: "", supplier: "" }]);
-  };
-  const deletePurchase = id => {
-    setPurchases(prev => prev.filter(p => p.id !== id));
-  };
+    return updated;
+  });
+
+  // ✅ 新增：把進貨紀錄存到 purchases
+  setPurchases(prev => [...prev, { id: Date.now(), date: now, items: purchaseList }]);
+
+  // ✅ 新增：清除 localStorage 暫存
+  localStorage.removeItem("draftStockEntry");
+
+  // ✅ 新增：顯示提示訊息
+  setMessage("✅ 已送出");
+  setTimeout(() => setMessage(""), 3000);
+
+  // ✅ 清空輸入列
+  setPurchaseList([{ name: "", qty: "", price: "", cost: "", supplier: "" }]);
+};
+
+const deletePurchase = id => {
+  setPurchases(prev => prev.filter(p => p.id !== id));
+};
 
   // 庫存總計
   const totalValue = items.reduce((s, i) => s + Number(i.qty || 0) * Number(i.price || 0), 0);
@@ -535,6 +564,7 @@ const exportOrdersToExcelByDate = (startDate, endDate) => {
           <div className="flex gap-2 mt-2">
             <button className="bg-blue-500 text-white px-4 py-2 rounded" onClick={addPurchaseRow}>新增商品列</button>
             <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={addPurchase}>完成進貨</button>
+            {message && <div className="text-green-600 font-bold mt-2">{message}</div>}
           </div>
 
           <h2 className="text-xl font-bold mt-4">進貨紀錄</h2>
